@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME     = 'sync-service'
+        GCP_KEY      = credentials('auth-key')
+        MONGO_URL    = credentials('mongodb-uri-secret')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & Test') {
+            steps {
+                sh './mvnw clean package'
+            }
+        }
+
+        stage('Deploy QA') {
+            when { branch 'dev' }
+            steps {
+                echo "Deploying ${APP_NAME} to QA"
+            }
+        }
+        
+        stage('Deploy Staging') {
+            when { branch 'release/*' }
+            steps {
+                echo "Deploying ${APP_NAME} to Staging"
+            }
+        }
+
+        stage('Production Gate') {
+            when { branch 'main' }
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    input message: "Deploy to Production?", ok: "Approve"
+                }
+            }
+        }
+
+        stage('Deploy Production') {
+            when { branch 'main' }
+            steps {
+                echo "Deploying ${APP_NAME} to Production"
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Deployment failed"
+        }
+        success {
+            echo "Pipeline finished successfully"
+        }
+    }
+}
